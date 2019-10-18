@@ -1,0 +1,6 @@
+data/
+*.egg-info/
+.DS_STORE
+venv
+.env
+*.pyc
