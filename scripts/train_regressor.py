@@ -13,7 +13,7 @@ import sklearn.isotonic as isotonic
 import sklearn.gaussian_process as gaussian_process
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import PolynomialFeatures
-from sklearn.pipeline import make_pipeline, Pipeline
+from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 from sklearn.decomposition import PCA
 import imageio
@@ -31,9 +31,10 @@ def main(args):
     db_train = db_dict["all" if args.no_split else "train"]
     db_test = db_dict["test"]
 
-    features_train = np.load(open(args.features_train, "rb"))
-    features_test = np.load(open(args.features_test, "rb"))
-
+    features = np.load(open(args.features, "rb"), allow_pickle=True).item()
+    features_train = [features[profile_id]
+                      for profile_id in db_train.keys()]
+    features_test = [features[profile_id] for profile_id in db_test.keys()]
     nan_idx_train = np.argwhere(np.isnan(features_train))
     nan_idx_test = np.argwhere(np.isnan(features_test))
     nan_idx_train = np.unique(nan_idx_train[:, 0])
@@ -42,11 +43,11 @@ def main(args):
     print("Found {}/{} images without faces in test split".format(len(nan_idx_test), len(db_test)))
     features_train = np.delete(features_train, nan_idx_train, axis=0)
     features_test = np.delete(features_test, nan_idx_test, axis=0)
-    db_train = np.delete(db_train, nan_idx_train)
-    db_test = np.delete(db_test, nan_idx_test)
+    db_flat_train = np.delete(list(db_train.values()), nan_idx_train)
+    db_flat_test = np.delete(list(db_test.values()), nan_idx_test)
 
-    scores_train = [d["score"] for d in db_train]
-    scores_test = [d["score"] for d in db_test]
+    scores_train = [d["score"] for d in db_flat_train]
+    scores_test = [d["score"] for d in db_flat_test]
 
     logits_train = [logit(s) for s in scores_train]
     logits_test = [logit(s) for s in scores_test]
@@ -54,10 +55,10 @@ def main(args):
     # uncomment regressors to train
     model_info_list = (
         (linear_model.LinearRegression,),
-        # (linear_model.Lasso, dict(type="CONT", init=dict(alpha=1e-2))),
-        # (linear_model.Ridge, dict(type="CONT", init=dict(alpha=1))),
-        # (linear_model.BayesianRidge, dict(type="CONT", init=dict(
-        #     alpha_1=1e-06, alpha_2=1e-06, lambda_1=1e-06, lambda_2=1e-06))),
+        (linear_model.Lasso, dict(type="CONT", init=dict(alpha=1e-2))),
+        (linear_model.Ridge, dict(type="CONT", init=dict(alpha=1))),
+        (linear_model.BayesianRidge, dict(type="CONT", init=dict(
+            alpha_1=1e-06, alpha_2=1e-06, lambda_1=1e-06, lambda_2=1e-06))),
 
         # (linear_model.SGDRegressor,),
         # (linear_model.ElasticNet,),  # const
@@ -166,15 +167,9 @@ def parse_args():
         type=str
     )
     parser.add_argument(
-        '--features-test',
-        dest='features_test',
-        default='data/mtcnn-facenet/features-train.npy',
-        type=str
-    )
-    parser.add_argument(
-        '--features-train',
-        dest='features_train',
-        default='data/mtcnn-facenet/features-test.npy',
+        '--features',
+        dest='features',
+        default='data/mtcnn-facenet/features.npy',
         type=str
     )
     parser.add_argument(

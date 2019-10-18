@@ -13,12 +13,13 @@ def main(args):
     db_dict = pickle.load(open(args.db_file, "rb"))
     db = db_dict["all"]
 
-    features = np.load(open(args.features_file, "rb"))
+    features = np.load(open(args.features, "rb"), allow_pickle=True).item()
+    features = [features[profile_id] for profile_id in db.keys()]
     nan_idx = np.argwhere(np.isnan(features))
     nan_idx = np.unique(nan_idx[:, 0])
     print("Found {}/{} images without faces".format(len(nan_idx), len(db)))
     features = np.delete(features, nan_idx, axis=0)
-    db = np.delete(db, nan_idx)
+    db_flat = np.delete(list(db.values()), nan_idx)
 
     model = joblib.load(args.model_file)
     logits_pred = model.predict(features)
@@ -36,10 +37,10 @@ def main(args):
     plt.show()
 
     # visualize some random profiles
-    for i in range(len(db)):
-        random_idx = np.random.choice(range(len(db)))
+    for i in range(len(db_flat)):
+        random_idx = np.random.choice(range(len(db_flat)))
         # random_idx = i
-        img_paths = db[random_idx]["img_paths"]
+        img_paths = db_flat[random_idx]["img_paths"]
         score = scores_pred[random_idx]
         # if score > 4:
         #     continue
@@ -81,14 +82,8 @@ def parse_args():
         type=str
     )
     parser.add_argument(
-        '--gen-features',
-        dest='gen_features',
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
         '--features',
-        dest='features_file',
+        dest='features',
         type=str
     )
     return parser.parse_args()

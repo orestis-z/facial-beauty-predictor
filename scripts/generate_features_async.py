@@ -10,37 +10,25 @@ from attractiveness_estimator.worker import worker_mtcnn_async, worker_mtcnn_fac
 
 def main(args):
     db_dict = pickle.load(open(args.db_file, "rb"))
+    db = db_dict["all"]
 
-    if args.split is not None:
-        keys = (args.split,)
+    if args.backbone == "mtcnn-facenet":
+        features_dict = worker_mtcnn_facenet_async(
+            db, args.facenet_model_path, skip_multiple_faces=bool(args.skip_multiple_faces))
+    elif args.backbone == "mtcnn":
+        features_dict = worker_mtcnn_async(db)
+    elif args.backbone == "mtcnn-facenet-2":
+        features_dict = worker_mtcnn_facenet_2_async(
+            db, args.facenet_model_path)
     else:
-        keys = ("train", "test", "all")
-    for key in keys:
-        print("Generating features for {}".format(key))
-        db = db_dict[key]
+        raise ValueError
 
-        if args.backbone == "mtcnn-facenet":
-            features_list = worker_mtcnn_facenet_async(
-                db, args.facenet_model_path, skip_multiple_faces=bool(args.skip_multiple_faces))
-        elif args.backbone == "mtcnn":
-            features_list = worker_mtcnn_async(db)
-        elif args.backbone == "mtcnn-facenet-2":
-            features_list = worker_mtcnn_facenet_2_async(
-                db, args.facenet_model_path)
-        else:
-            raise ValueError
-
-        features_db = np.zeros(
-            (len(features_list), 128 if args.backbone == "mtcnn-facenet" else 256 + 128 if args.backbone == "mtcnn-facenet-2" else 256))
-        for features in features_list:
-            features_db[features["id"], :] = features["features"]
-
-        output_dir = os.path.join(args.output_dir, args.backbone)
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
-        features_path = os.path.join(output_dir, "features-{}.npy".format(key))
-        print("Saving features to {}".format(features_path))
-        np.save(open(features_path, "wb"), features_db)
+    output_dir = os.path.join(args.output_dir, args.backbone)
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    features_path = os.path.join(output_dir, "features.npy")
+    print("Saving features to {}".format(features_path))
+    np.save(open(features_path, "wb"), features_dict)
 
 
 def parse_args():
@@ -54,11 +42,6 @@ def parse_args():
         '--output-dir',
         dest='output_dir',
         default='data',
-        type=str
-    )
-    parser.add_argument(
-        '--split',
-        dest='split',
         type=str
     )
     parser.add_argument(

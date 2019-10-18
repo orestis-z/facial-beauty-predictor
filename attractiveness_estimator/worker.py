@@ -18,146 +18,96 @@ FACE_IMAGE_SIZE = 182
 IMAGE_BATCH = 1000
 
 
-def worker_mtcnn_facenet_async(data, facenet_model_path, skip_multiple_faces=False):
-     # img_paths -> img_list -> croped_faces -> features -> avg_features
+def worker_mtcnn_facenet_async(db, facenet_model_path, skip_multiple_faces=False):
+    # img_paths -> img_list -> croped_faces -> features -> avg_features
     img_paths_queue = Queue()
-    img_list_queue = Queue()
-    cropped_faces_queue = Queue()
-    features_queue = Queue()
-    avg_features_queue = Queue()
+    pipeline = Pipeline(img_paths_queue,
+                        image_loader_async,
+                        (mtcnn_face_detector_async, dict(kwargs=dict(
+                            skip_multiple_faces=skip_multiple_faces))),
+                        (gen_facenet_features_async,
+                         dict(args=[facenet_model_path])),
+                        calc_avg_features_async)
+    for profile_id, profile in db.items():
+        img_paths_queue.put(dict(id=profile_id, paths=profile["img_paths"]))
+    pipeline.join()
+    features_list = pipeline.get_output()
+    features_dict = {features["id"]: features["features"]
+                     for features in features_list}
 
-    image_loader_thread = Thread(
-        target=image_loader_async, args=(img_paths_queue, img_list_queue))
-    image_loader_thread.daemon = True
-    image_loader_thread.start()
-
-    face_detector_thread = Thread(
-        target=mtcnn_face_detector_async, args=(img_list_queue, cropped_faces_queue), kwargs=dict(skip_multiple_faces=skip_multiple_faces))
-    face_detector_thread.daemon = True
-    face_detector_thread.start()
-
-    export_features_thread = Thread(
-        target=gen_facenet_features_async, args=(cropped_faces_queue, features_queue, facenet_model_path))
-    export_features_thread.daemon = True
-    export_features_thread.start()
-
-    calc_avg_features_thread = Thread(
-        target=calc_avg_features_async, args=(features_queue, avg_features_queue))
-    calc_avg_features_thread.daemon = True
-    calc_avg_features_thread.start()
-
-    avg_features = []
-
-    def collect_avg_features():
-        while True:
-            avg_features.append(avg_features_queue.get())
-            avg_features_queue.task_done()
-    collect_features_thread = Thread(target=collect_avg_features)
-    collect_features_thread.daemon = True
-    collect_features_thread.start()
-
-    for i, d in enumerate(data):
-        img_paths_queue.put(dict(id=i, paths=d["img_paths"]))
-
-    img_paths_queue.join()
-    img_list_queue.join()
-    cropped_faces_queue.join()
-    features_queue.join()
-    avg_features_queue.join()
-
-    return avg_features
+    return features_dict
 
 
-def worker_mtcnn_async(data):
-     # img_paths -> img_list -> features -> avg_features
+def worker_mtcnn_async(db):
+    # img_paths -> img_list -> features -> avg_features
     img_paths_queue = Queue()
-    img_list_queue = Queue()
-    features_queue = Queue()
-    avg_features_queue = Queue()
+    pipeline = Pipeline(img_paths_queue,
+                        image_loader_async,
+                        mtcnn_features_async,
+                        calc_avg_features_async)
+    for profile_id, profile in db.items():
+        img_paths_queue.put(dict(id=profile_id, paths=profile["img_paths"]))
+    pipeline.join()
+    features_list = pipeline.get_output()
+    features_dict = {features["id"]: features["features"]
+                     for features in features_list}
 
-    image_loader_thread = Thread(
-        target=image_loader_async, args=(img_paths_queue, img_list_queue))
-    image_loader_thread.daemon = True
-    image_loader_thread.start()
-
-    mtcnn_thread = Thread(
-        target=mtcnn_features_async, args=(img_list_queue, features_queue))
-    mtcnn_thread.daemon = True
-    mtcnn_thread.start()
-
-    calc_avg_features_thread = Thread(
-        target=calc_avg_features_async, args=(features_queue, avg_features_queue))
-    calc_avg_features_thread.daemon = True
-    calc_avg_features_thread.start()
-
-    avg_features = []
-
-    def collect_avg_features():
-        while True:
-            avg_features.append(avg_features_queue.get())
-            avg_features_queue.task_done()
-    collect_features_thread = Thread(target=collect_avg_features)
-    collect_features_thread.daemon = True
-    collect_features_thread.start()
-
-    for i, d in enumerate(data):
-        img_paths_queue.put(dict(id=i, paths=d["img_paths"]))
-
-    img_paths_queue.join()
-    img_list_queue.join()
-    features_queue.join()
-    avg_features_queue.join()
-
-    return avg_features
+    return features_dict
 
 
-def worker_mtcnn_facenet_2_async(data, facenet_model_path):
-     # img_paths -> img_list -> croped_faces -> features -> avg_features
+def worker_mtcnn_facenet_2_async(db, facenet_model_path):
+    # img_paths -> img_list -> croped_faces -> features -> avg_features
     img_paths_queue = Queue()
-    img_list_queue = Queue()
-    cropped_faces_queue = Queue()
-    features_queue = Queue()
-    avg_features_queue = Queue()
+    pipeline = Pipeline(img_paths_queue,
+                        image_loader_async,
+                        (mtcnn_face_detector_async, dict(kwargs=dict(
+                            skip_multiple_faces=True, store_features=True))),
+                        (gen_facenet_features_async,
+                         dict(args=[facenet_model_path])),
+                        calc_avg_features_async)
+    for profile_id, profile in db.items():
+        img_paths_queue.put(dict(id=profile_id, paths=profile["img_paths"]))
+    pipeline.join()
+    features_list = pipeline.get_output()
+    features_dict = {features["id"]: features["features"]
+                     for features in features_list}
 
-    image_loader_thread = Thread(
-        target=image_loader_async, args=(img_paths_queue, img_list_queue))
-    image_loader_thread.daemon = True
-    image_loader_thread.start()
+    return features_dict
 
-    face_detector_thread = Thread(
-        target=mtcnn_face_detector_async, args=(img_list_queue, cropped_faces_queue), kwargs=dict(skip_multiple_faces=True, store_features=True))
-    face_detector_thread.daemon = True
-    face_detector_thread.start()
 
-    export_features_thread = Thread(
-        target=gen_facenet_features_async, args=(cropped_faces_queue, features_queue, facenet_model_path))
-    export_features_thread.daemon = True
-    export_features_thread.start()
+class Pipeline():
+    def __init__(self, in_queue, *parts):
+        self.queue_list = [in_queue]
+        out_queue = in_queue
+        for part in parts:
+            if hasattr(part, "__len__"):
+                func = part[0]
+                args = part[1].get("args", [])
+                kwargs = part[1].get("kwargs", {})
+            else:
+                func = part
+                args = []
+                kwargs = {}
+            in_queue = out_queue
+            out_queue = Queue()
+            self.queue_list.append(out_queue)
+            thread = Thread(
+                target=func, args=(in_queue, out_queue, *args),
+                kwargs=kwargs)
+            thread.daemon = True
+            thread.start()
+        self.out_list = []
+        thread = Thread(
+            target=collect_async, args=(out_queue, self.out_list))
+        thread.daemon = True
+        thread.start()
 
-    calc_avg_features_thread = Thread(
-        target=calc_avg_features_async, args=(features_queue, avg_features_queue))
-    calc_avg_features_thread.daemon = True
-    calc_avg_features_thread.start()
+    def join(self):
+        for queue in self.queue_list:
+            queue.join()
 
-    avg_features = []
-
-    def collect_avg_features():
-        while True:
-            avg_features.append(avg_features_queue.get())
-            avg_features_queue.task_done()
-    collect_features_thread = Thread(target=collect_avg_features)
-    collect_features_thread.daemon = True
-    collect_features_thread.start()
-    for i, d in enumerate(data):
-        img_paths_queue.put(dict(id=i, paths=d["img_paths"]))
-
-    img_paths_queue.join()
-    img_list_queue.join()
-    cropped_faces_queue.join()
-    features_queue.join()
-    avg_features_queue.join()
-
-    return avg_features
+    def get_output(self):
+        return self.out_list
 
 
 def image_loader_async(img_path_queue, img_list_queue):
@@ -339,5 +289,11 @@ def calc_avg_features_async(features_queue, avg_features_queue):
         avg_features = np.mean(features, axis=0)
 
         avg_features_queue.put(
-            dict(id=profile_id, avg_features=avg_features))
+            dict(id=profile_id, features=avg_features))
         features_queue.task_done()
+
+
+def collect_async(in_queue, out_list):
+    while True:
+        out_list.append(in_queue.get())
+        in_queue.task_done()

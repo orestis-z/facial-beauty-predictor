@@ -18,14 +18,15 @@ def main(args):
 
     db_dict = pickle.load(open(args.db_file, "rb"))
     db = db_dict["test"]
-    features = np.load(open(args.features, "rb"))
+    features = np.load(open(args.features, "rb"), allow_pickle=True).item()
+    features = [features[profile_id] for profile_id in db.keys()]
     nan_idx = np.argwhere(np.isnan(features))
     nan_idx = np.unique(nan_idx[:, 0])
     print("Found {} images without faces in test split".format(len(nan_idx)))
     features = np.delete(features, nan_idx, axis=0)
-    db = np.delete(db, nan_idx)
+    db_flat = np.delete(list(db.values()), nan_idx)
 
-    scores = np.array([d["score"] for d in db])
+    scores = np.array([d["score"] for d in db_flat])
 
     sorted_inds = np.argsort(scores)
     scores_sorted = scores[sorted_inds]
@@ -33,7 +34,7 @@ def main(args):
     x = np.arange(0, 1, 1 / len(features))
 
     n_plots = len(model_files)
-    n_cols = min(math.ceil(np.sqrt(n_plots)), 5)
+    n_cols = 3  # min(math.ceil(np.sqrt(n_plots)), 5)
     n_rows = max(math.ceil(n_plots / n_cols), 2)
 
     fig, axs = plt.subplots(n_rows, n_cols, figsize=(14, 8))
@@ -96,7 +97,7 @@ def parse_args():
     parser.add_argument(
         '--features',
         dest='features',
-        default='data/features-test.npy',
+        default='data/features.npy',
         type=str
     )
     return parser.parse_args()

@@ -3,10 +3,13 @@ import pickle
 import argparse
 
 
+# db_dict = {split: {profile_id: {img_paths}}}
+
+
 def main(args):
     directories = os.listdir(args.db_dir)
 
-    db = []
+    db = {}
     for directory in directories:
         if directory[0] != ".":
             img_paths = []
@@ -21,8 +24,7 @@ def main(args):
                             file_640 = file
                     if file_640 is not None:
                         img_paths.append(os.path.join(sub_sub_dir, file_640))
-            db.append(dict(img_paths=img_paths))
-    # db = db[:5]
+            db[directory] = dict(img_paths=img_paths)
     db_dict = dict(all=db)
     pickle.dump(db_dict, open(os.path.join(
         args.output_dir, "tinder.pkl"), "wb"))

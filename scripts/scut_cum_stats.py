@@ -12,7 +12,7 @@ from scipy.special import logit
 def main(args):
     data = pickle.load(open(args.data_file, "rb"))
 
-    sorted_scores = sorted([d["score"] for d in data["all"]])
+    sorted_scores = sorted([d["score"] for _, d in data["all"].items()])
 
     x = np.arange(0, 1, 1 / len(sorted_scores))
 
