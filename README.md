@@ -10,15 +10,12 @@
 
 ## Requirements:
 
-- python3
+- python 3.7
+- [pipenv](https://github.com/pypa/pipenv)
 
 ## Installation
 
-`python3 -m venv venv`
-
-`. venv/bin/activate`
-
-`python setup.py develop`
+`pipenv install --dev`
 
 ## Quick Start
 

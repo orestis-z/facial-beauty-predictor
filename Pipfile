@@ -1,0 +1,19 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+matplotlib = "*"
+
+[packages]
+tensorflow = "<2.0,>=1.15.0"
+numpy = "*"
+imageio = "*"
+scikit-learn = "*"
+joblib = "*"
+opencv-python = "*"
+scikit-image = "*"
+
+[requires]
+python_version = "3.7"

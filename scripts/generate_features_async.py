@@ -1,9 +1,12 @@
 import os
+import sys
 import argparse
 import pickle
 
 import numpy as np
 from scipy.special import logit
+
+sys.path.append(os.path.abspath('../attractiveness_estimator')) # Ignore
 
 from attractiveness_estimator.worker import worker_mtcnn_async, worker_mtcnn_facenet_async, worker_mtcnn_facenet_2_async
 
