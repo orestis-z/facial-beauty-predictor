@@ -14,6 +14,16 @@ scikit-learn = "*"
 joblib = "*"
 opencv-python = "*"
 scikit-image = "*"
+flask = "*"
+sentry-sdk = "*"
+flask-json = "*"
+gunicorn = "*"
+gevent = "*"
+psutil = "*"
+requests = "*"
 
 [requires]
 python_version = "3.7"
+
+[scripts]
+gunicorn-dev = "gunicorn attractiveness_estimator.server.wsgi -k gevent -b localhost:5000 -p master.pid -c attractiveness_estimator/server/wsgi/gunicorn_config.py --reload"

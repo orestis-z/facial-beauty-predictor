@@ -1,17 +1,17 @@
 import os
+import sys
 import argparse
 import pickle
 
 import numpy as np
-from scipy.special import logit
 from scipy.optimize import minimize
+from scipy.stats import pearsonr
 import sklearn.linear_model as linear_model
 import sklearn.svm as svm
 import sklearn.ensemble as ensemble
 import sklearn.kernel_ridge as kernel_ridge
 import sklearn.isotonic as isotonic
 import sklearn.gaussian_process as gaussian_process
-from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
@@ -22,7 +22,7 @@ import joblib
 
 def main(args):
     model_dir = os.path.join(
-        args.output_dir,  "models/{}".format("all/" if args.no_split else ""))
+        args.output_dir, "models/{}".format("all/" if args.no_split else ""))
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
 
@@ -49,14 +49,11 @@ def main(args):
     scores_train = [d["score"] for d in db_flat_train]
     scores_test = [d["score"] for d in db_flat_test]
 
-    logits_train = [logit(s) for s in scores_train]
-    logits_test = [logit(s) for s in scores_test]
-
     # uncomment regressors to train
     model_info_list = (
         (linear_model.LinearRegression,),
-        (linear_model.Lasso, dict(type="CONT", init=dict(alpha=1e-2))),
-        (linear_model.Ridge, dict(type="CONT", init=dict(alpha=1))),
+        (linear_model.Lasso, dict(type="CONT", init=dict(alpha=1e-4))),
+        (linear_model.Ridge, dict(type="CONT", init=dict(alpha=1e-4))),
         (linear_model.BayesianRidge, dict(type="CONT", init=dict(
             alpha_1=1e-06, alpha_2=1e-06, lambda_1=1e-06, lambda_2=1e-06))),
 
@@ -69,7 +66,7 @@ def main(args):
         # (linear_model.PassiveAggressiveRegressor,),
         # (linear_model.TheilSenRegressor,),
         # (kernel_ridge.KernelRidge, dict(type="CONT", init=dict(
-        #     alpha=1), kwargs=dict(kernel='sigmoid'))),
+        #     alpha=1), kwargs=dict(kernel="sigmoid"))),
         # (svm.SVR,),
         # (ensemble.AdaBoostRegressor,),
         # (ensemble.GradientBoostingRegressor,),
@@ -92,9 +89,9 @@ def main(args):
                 if args.pca:
                     pca = PCA(n_components=args.pca)
                     pipeline_list = [
-                        ('poly', poly), ('pca', pca), ('fit', model)]
+                        ("poly", poly), ("pca", pca), ("fit", model)]
                 else:
-                    pipeline_list = [('poly', poly), ('fit', model)]
+                    pipeline_list = [("poly", poly), ("fit", model)]
                 return Pipeline(pipeline_list)
 
             if len(model_info) == 2:
@@ -104,13 +101,13 @@ def main(args):
             if meta.get("type") is None:
                 print("Constant params")
                 model = get_model()
-                model.fit(features_train, logits_train)
+                model.fit(features_train, scores_train)
             elif meta["type"] == "GRID":
                 print("Finding optimal params from grid")
                 param_grid = {"fit__" + k: v for k, v in meta["grid"].items()}
                 model = get_model()
                 model = GridSearchCV(model, param_grid=param_grid,).fit(
-                    features_train, logits_train).best_estimator_
+                    features_train, scores_train).best_estimator_
                 print(model)
             elif meta["type"] == "CONT":
                 print("Optimizing continuous params")
@@ -119,22 +116,22 @@ def main(args):
                 def func(x):
                     kwargs = {k: x[i] for i, k in enumerate(init.keys())}
                     model = get_model(kwargs)
-                    model.fit(features_train, logits_train)
-                    logits_pred = model.predict(features_train)
-                    mse = mean_squared_error(logits_pred, logits_train)
-                    return mse
-                res = minimize(func, list(init.values()), method='Nelder-Mead')
+                    model.fit(features_train, scores_train)
+                    scores_pred = model.predict(features_train)
+                    pc = pearsonr(scores_pred, scores_train)[0]
+                    return -pc
+                res = minimize(func, list(init.values()), method="Nelder-Mead")
                 print(res)
                 res_kwargs = {k: res.x[i] for i, k in enumerate(init.keys())}
                 model = model_class(**res_kwargs)
-                model.fit(features_train, logits_train)
+                model.fit(features_train, scores_train)
             else:
                 raise ValueError
 
             if not args.no_split:
-                logits_pred = model.predict(features_test)
-                mse = mean_squared_error(logits_pred, logits_test)
-                print("MSE: {:.3f}".format(mse))
+                scores_pred = model.predict(features_test)
+                pc = pearsonr(scores_pred, scores_test)[0]
+                print("PC: {:.3f}".format(pc))
 
             name = fullname(model_class)
             if args.pca:
@@ -150,50 +147,50 @@ def fullname(cls):
     if module is None or module == str.__class__.__module__:
         return cls.__name__  # Avoid reporting __builtin__
     else:
-        return module + '.' + cls.__name__
+        return module + "." + cls.__name__
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--db',
-        dest='db_file',
+        "--db",
+        dest="db_file",
         type=str
     )
     parser.add_argument(
-        '--output-dir',
-        dest='output_dir',
-        default='data',
+        "--output-dir",
+        dest="output_dir",
+        default="data",
         type=str
     )
     parser.add_argument(
-        '--features',
-        dest='features',
-        default='data/mtcnn-facenet/features.npy',
+        "--features",
+        dest="features",
+        default="data/mtcnn-facenet/features.npy",
         type=str
     )
     parser.add_argument(
-        '--no-split',
-        dest='no_split',
+        "--no-split",
+        dest="no_split",
         action="store_true",
         default=False,
     )
     parser.add_argument(
-        '--pca',
-        dest='pca',
+        "--pca",
+        dest="pca",
         default=0,
         type=int
     )
     parser.add_argument(
-        '--max-order',
-        dest='max_order',
+        "--max-order",
+        dest="max_order",
         default=2,
         type=int
     )
     return parser.parse_args()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
     if not os.path.exists(args.output_dir):
         os.mkdir(args.output_dir)

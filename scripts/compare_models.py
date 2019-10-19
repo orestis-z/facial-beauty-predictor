@@ -1,11 +1,11 @@
 import argparse
+import sys
 import os
 import importlib
 import pickle
 import joblib
 import math
 
-from scipy.special import expit
 import sklearn.metrics as metrics
 from scipy.stats import pearsonr
 import numpy as np
@@ -52,10 +52,8 @@ def main(args):
         order = int(model_file[-5])
 
         model = joblib.load(os.path.join(args.models_dir, model_file))
-        logits_pred = model.predict(features)
-        scores_pred = np.array([expit(y) for y in logits_pred])
-        rmse = np.sqrt(metrics.mean_squared_error(scores_pred, scores))
-        mae = metrics.mean_absolute_error(scores_pred, scores)
+        scores_pred = model.predict(features)
+        scores_pred = np.clip(scores_pred, 0, 1)
         pc = pearsonr(scores_pred, scores)
 
         ax.plot(scores_sorted,
@@ -64,8 +62,7 @@ def main(args):
         ax.legend()
         ax.set_ylabel('score', fontsize=FONTSIZE)
         ax.set_xlabel('score GT', fontsize=FONTSIZE)
-        ax.set_title("{} ({})\nRMSE: {:.4f}, MAE: {:.4f}, PC {:.3f}".format(
-            model_name, order, rmse, mae, pc[0]))
+        ax.set_title("{} ({})\nPC {:.3f}".format(model_name, order, pc[0]))
         ax.grid(linestyle='--')
         for tick in ax.xaxis.get_major_ticks() + ax.yaxis.get_major_ticks():
             tick.label.set_fontsize(FONTSIZE)

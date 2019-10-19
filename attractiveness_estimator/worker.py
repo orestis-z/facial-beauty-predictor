@@ -3,15 +3,18 @@ import logging
 import time
 from queue import Queue
 from threading import Thread
+import logging
+import requests
+from io import BytesIO
 
 import tensorflow as tf
 from skimage.transform import resize
 import numpy as np
 import imageio
 
-from attractiveness_estimator.mtcnn.mtcnn import MTCNN
-import attractiveness_estimator.facenet as facenet
-import attractiveness_estimator.img_utils as img_utils
+from attractiveness_estimator.backbone.mtcnn.mtcnn import MTCNN
+import attractiveness_estimator.backbone.facenet as facenet
+import attractiveness_estimator.utils.img as img_utils
 
 MARGIN = 44
 FACE_IMAGE_SIZE = 182
@@ -21,13 +24,13 @@ IMAGE_BATCH = 1000
 def worker_mtcnn_facenet_async(db, facenet_model_path, skip_multiple_faces=False):
     # img_paths -> img_list -> croped_faces -> features -> avg_features
     img_paths_queue = Queue()
-    pipeline = Pipeline(img_paths_queue,
-                        image_loader_async,
-                        (mtcnn_face_detector_async, dict(kwargs=dict(
-                            skip_multiple_faces=skip_multiple_faces))),
-                        (gen_facenet_features_async,
-                         dict(args=[facenet_model_path])),
-                        calc_avg_features_async)
+    pipeline = PipelineJoinable(img_paths_queue,
+                                image_loader_async,
+                                (mtcnn_face_detector_async, dict(kwargs=dict(
+                                    skip_multiple_faces=skip_multiple_faces))),
+                                (gen_facenet_features_async,
+                                    dict(args=[facenet_model_path])),
+                                calc_avg_features_async)
     for profile_id, profile in db.items():
         img_paths_queue.put(dict(id=profile_id, paths=profile["img_paths"]))
     pipeline.join()
@@ -38,13 +41,26 @@ def worker_mtcnn_facenet_async(db, facenet_model_path, skip_multiple_faces=False
     return features_dict
 
 
+def worker_mtcnn_facenet_async_queue(img_paths_queue, facenet_model_path, regressor_model, skip_multiple_faces=True):
+    # img_paths -> img_list -> croped_faces -> features -> avg_features
+    pipeline = Pipeline(img_paths_queue,
+                        (image_loader_async, dict(kwargs=dict(local_files=False))),
+                        (mtcnn_face_detector_async, dict(kwargs=dict(
+                            skip_multiple_faces=skip_multiple_faces))),
+                        (gen_facenet_features_async,
+                         dict(args=[facenet_model_path])),
+                        calc_avg_features_async,
+                        (regress_score_async, dict(args=[regressor_model])))
+    return pipeline.out_queue
+
+
 def worker_mtcnn_async(db):
     # img_paths -> img_list -> features -> avg_features
     img_paths_queue = Queue()
-    pipeline = Pipeline(img_paths_queue,
-                        image_loader_async,
-                        mtcnn_features_async,
-                        calc_avg_features_async)
+    pipeline = PipelineJoinable(img_paths_queue,
+                                image_loader_async,
+                                mtcnn_features_async,
+                                calc_avg_features_async)
     for profile_id, profile in db.items():
         img_paths_queue.put(dict(id=profile_id, paths=profile["img_paths"]))
     pipeline.join()
@@ -58,13 +74,13 @@ def worker_mtcnn_async(db):
 def worker_mtcnn_facenet_2_async(db, facenet_model_path):
     # img_paths -> img_list -> croped_faces -> features -> avg_features
     img_paths_queue = Queue()
-    pipeline = Pipeline(img_paths_queue,
-                        image_loader_async,
-                        (mtcnn_face_detector_async, dict(kwargs=dict(
-                            skip_multiple_faces=True, store_features=True))),
-                        (gen_facenet_features_async,
-                         dict(args=[facenet_model_path])),
-                        calc_avg_features_async)
+    pipeline = PipelineJoinable(img_paths_queue,
+                                image_loader_async,
+                                (mtcnn_face_detector_async, dict(kwargs=dict(
+                                    skip_multiple_faces=True, store_features=True))),
+                                (gen_facenet_features_async,
+                                    dict(args=[facenet_model_path])),
+                                calc_avg_features_async)
     for profile_id, profile in db.items():
         img_paths_queue.put(dict(id=profile_id, paths=profile["img_paths"]))
     pipeline.join()
@@ -78,8 +94,8 @@ def worker_mtcnn_facenet_2_async(db, facenet_model_path):
 class Pipeline():
     def __init__(self, in_queue, *parts):
         self.queue_list = [in_queue]
-        out_queue = in_queue
-        for part in parts:
+        self.out_queue = in_queue
+        for i, part in enumerate(parts):
             if hasattr(part, "__len__"):
                 func = part[0]
                 args = part[1].get("args", [])
@@ -88,18 +104,21 @@ class Pipeline():
                 func = part
                 args = []
                 kwargs = {}
-            in_queue = out_queue
-            out_queue = Queue()
-            self.queue_list.append(out_queue)
+            in_queue = self.out_queue
+            self.out_queue = Queue()
+            self.queue_list.append(self.out_queue)
             thread = Thread(
-                target=func, args=(in_queue, out_queue, *args),
-                kwargs=kwargs)
-            thread.daemon = True
+                target=func, args=(in_queue, self.out_queue, *args),
+                kwargs=kwargs, name="Pipeline{}Thread".format(i), daemon=True)
             thread.start()
+
+
+class PipelineJoinable(Pipeline):
+    def __init__(self, in_queue, *parts):
+        super.__init__(in_queue, *parts)
         self.out_list = []
         thread = Thread(
-            target=collect_async, args=(out_queue, self.out_list))
-        thread.daemon = True
+            target=collect_async, args=(self.out_queue, self.out_list), name="PipelineCollectThread", daemon=True)
         thread.start()
 
     def join(self):
@@ -110,7 +129,7 @@ class Pipeline():
         return self.out_list
 
 
-def image_loader_async(img_path_queue, img_list_queue):
+def image_loader_async(img_path_queue, img_list_queue, local_files=True):
     while True:
         img_path_dict = img_path_queue.get()
         img_paths = img_path_dict["paths"]
@@ -118,11 +137,19 @@ def image_loader_async(img_path_queue, img_list_queue):
 
         img_list = []
         for img_path in img_paths:
-            if os.path.exists(img_path):
-                img = imageio.imread(img_path)
-                img_list.append(img)
+            if local_files:
+                if os.path.exists(img_path):
+                    img = imageio.imread(img_path)
+                    img_list.append(img)
+                else:
+                    logging.warn("{} not found".format(img_path))
             else:
-                logging.warn("{} not found".format(img_path))
+                try:
+                    response = requests.get(img_path, timeout=5)
+                    img = imageio.imread(BytesIO(response.content))
+                    img_list.append(img)
+                except Exception:
+                    logging.exception("Could not download {}".format(img_path))
         img_list_queue.put(dict(id=profile_id, img_list=img_list))
         img_path_queue.task_done()
 
@@ -131,6 +158,7 @@ def mtcnn_face_detector_async(img_list_queue, cropped_faces_queue,
                               skip_multiple_faces=False, store_features=False):
     # based on https://github.com/cjekel/tindetheus/blob/master/tindetheus/facenet_clone/align/align_dataset_mtcnn.py and https://github.com/davidsandberg/facenet/blob/master/src/align/align_dataset_mtcnn.py
     mtcnn = MTCNN()
+    logging.debug("MTCNN initialization done")
 
     while True:
         img_list_dict = img_list_queue.get()
@@ -140,7 +168,7 @@ def mtcnn_face_detector_async(img_list_queue, cropped_faces_queue,
         faces = []
         features = [] if store_features else None
 
-        for img in img_list:
+        for i, img in enumerate(img_list):
             img = img[:, :, 0:3]
             bounding_boxes, _, fc1 = mtcnn.detect_faces_raw(img)
             n_faces = bounding_boxes.shape[0]
@@ -170,7 +198,10 @@ def mtcnn_face_detector_async(img_list_queue, cropped_faces_queue,
                 cropped = img[bb[1]:bb[3], bb[0]:bb[2], :]
                 scaled = resize(cropped, (FACE_IMAGE_SIZE, FACE_IMAGE_SIZE),
                                 mode='constant')
-            faces.append(scaled)
+                faces.append(scaled)
+            else:
+                logging.debug(
+                    "No faces found in image nr {} of {}".format(i + 1, profile_id))
             if store_features:
                 features.append(fc1)
 
@@ -183,6 +214,7 @@ def mtcnn_face_detector_async(img_list_queue, cropped_faces_queue,
 
 def mtcnn_features_async(img_list_queue, features_queue):
     mtcnn = MTCNN()
+    logging.debug("MTCNN initialization done")
 
     while True:
         img_list_dict = img_list_queue.get()
@@ -208,9 +240,11 @@ def gen_facenet_features_async(cropped_faces_queue, features_queue,
                                model_path, image_size=160):
     # based on https://github.com/cjekel/tindetheus/blob/master/tindetheus/export_features.py and https://github.com/davidsandberg/facenet/blob/master/src/compare.py
     with tf.Graph().as_default():
-        with tf.Session() as sess:
+        with tf.compat.v1.Session() as sess:
             # Load the model
             facenet.load_model(model_path)
+
+            logging.debug("FaceNet initialization done")
 
             # Get input and output tensors
             images_placeholder = tf.compat.v1.get_default_graph().get_tensor_by_name("input:0")
@@ -290,6 +324,28 @@ def calc_avg_features_async(features_queue, avg_features_queue):
 
         avg_features_queue.put(
             dict(id=profile_id, features=avg_features))
+        features_queue.task_done()
+
+
+def regress_score_async(features_queue, score_queue, model):
+    while True:
+        features_dict = features_queue.get()
+        features = features_dict["features"].reshape(
+            1, -1)  # (1, 128) for FaceNet
+        profile_id = features_dict["id"]
+
+        if features.shape[0]:
+            try:
+                score_pred = model.predict(features)
+                score_pred = np.clip(score_pred, 0, 1)
+            except Exception:
+                logging.exception("Failed to predict profile score")
+                score_pred = None
+        else:
+            score_pred = 0
+
+        score_queue.put(
+            dict(id=profile_id, score=score_pred))
         features_queue.task_done()
 
 

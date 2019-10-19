@@ -11,9 +11,9 @@ import cv2
 import numpy as np
 import pkg_resources
 import tensorflow as tf
-from attractiveness_estimator.mtcnn.layer_factory import LayerFactory
-from attractiveness_estimator.mtcnn.network import Network
-from attractiveness_estimator.mtcnn.exceptions import InvalidImage
+from attractiveness_estimator.backbone.mtcnn.layer_factory import LayerFactory
+from attractiveness_estimator.backbone.mtcnn.network import Network
+from attractiveness_estimator.backbone.mtcnn.exceptions import InvalidImage
 
 
 class PNet(Network):
