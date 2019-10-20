@@ -21,6 +21,8 @@ from sklearn.decomposition import PCA
 import imageio
 import joblib
 
+from utils import normalize_dataset
+
 
 def main(args):
     model_dir = os.path.join(
@@ -29,27 +31,29 @@ def main(args):
         os.makedirs(model_dir)
 
     db_dict = pickle.load(open(args.db_file, "rb"))
-    db_train = db_dict["all" if args.no_split else "train"]
-    db_test = db_dict["test"]
+    db_dict = normalize_dataset(db_dict)
+    db_train = db_dict["data"]["all" if args.no_split else "train"]
+    db_test = db_dict["data"]["test"]
     features = np.load(open(args.features, "rb"), allow_pickle=True).item()
 
     if args.db_extra_file is not None:
         assert args.features_extra is not None
         db_extra_dict = pickle.load(open(args.db_extra_file, "rb"))
-        db_extra_train = db_extra_dict["all" if args.no_split else "train"]
+        db_extra_dict = normalize_dataset(db_extra_dict)
+        db_extra_train = db_extra_dict["data"]["all" if args.no_split else "train"]
 
-        # ensure all datasets of same size
-        db_extra_train_keys = db_extra_train.keys()
-        db_train_keys = db_train.keys()
-        if len(db_extra_train_keys) > len(db_train_keys):
-            db_extra_train_keys = random.sample(
-                db_extra_train_keys, len(db_train_keys))
-            db_extra_train = {key: db_extra_train_keys[key]
-                              for key in db_extra_train_keys}
-        else:
-            db_train_keys = random.sample(
-                db_train_keys, len(db_extra_train_keys))
-            db_train = {key: db_train[key] for key in db_train_keys}
+        # # normalize datasets
+        # db_extra_train_keys = db_extra_train.keys()
+        # db_train_keys = db_train.keys()
+        # if len(db_extra_train_keys) > len(db_train_keys):
+        #     db_extra_train_keys = random.sample(
+        #         db_extra_train_keys, len(db_train_keys))
+        #     db_extra_train = {key: db_extra_train_keys[key]
+        #                       for key in db_extra_train_keys}
+        # else:
+        #     db_train_keys = random.sample(
+        #         db_train_keys, len(db_extra_train_keys))
+        #     db_train = {key: db_train[key] for key in db_train_keys}
 
         db_train.update(db_extra_train)
         features_extra = np.load(

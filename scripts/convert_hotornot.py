@@ -26,11 +26,19 @@ def main(args):
     db_dict = {"train{}".format(i + 1): db[0] for i, db in enumerate(db_list)}
     db_dict.update({"test{}".format(i + 1): db[1]
                     for i, db in enumerate(db_list)})
+    db_dict_all = {**db_dict["train1"], **db_dict["test1"]}
+    db_dict_female = {key: el for key,
+                      el in db_dict_all.items() if el["meta"]["gender"] == "F"}
     db_dict.update(dict(
-        all={**db_dict["train1"], **db_dict["test1"]},
-        train=db_dict["train1"],
-        test=db_dict["test1"],
+        data=dict(all=db_dict_all,
+                  train=db_dict["train1"],
+                  test=db_dict["test1"],
+                  f=db_dict_female),
+        meta=dict(genders=("F",), ethnicities=False)
     ))
+    print("Stats:")
+    print("Total size: {}".format(len(db_dict_all.keys())))
+    print("Female size: {}".format(len(db_dict_female.keys())))
     pickle.dump(db_dict, open(os.path.join(
         args.output_dir, "hotornot.pkl"), "wb"))
 
@@ -38,7 +46,8 @@ def main(args):
 def _rows_to_db(rows, min_score, max_score):
     return {row[0][:-4]: {
         "img_paths": [os.path.join(args.db_dir, "hotornot_face", row[0][:-3] + "jpg")],
-        "score": (float(row[1]) - min_score) / (max_score - min_score)
+        "score": (float(row[1]) - min_score) / (max_score - min_score),
+        "meta": dict(gender="F" if row[0][:6] == "female" else "M")
     } for row in rows}
 
 
