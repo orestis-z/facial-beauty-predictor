@@ -28,7 +28,7 @@ def main(args):
 
     output_dir = os.path.join(args.output_dir, args.backbone)
     if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
+        os.makedirs(output_dir)
     features_path = os.path.join(output_dir, "features.npy")
     print("Saving features to {}".format(features_path))
     np.save(open(features_path, "wb"), features_dict)
@@ -71,5 +71,5 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     if not os.path.exists(args.output_dir):
-        os.mkdir(args.output_dir)
+        os.makedirs(args.output_dir)
     main(args)

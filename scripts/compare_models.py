@@ -49,9 +49,14 @@ def main(args):
         ax = axs[row, col]
 
         model_name = model_file[:-6].split(".")[-1]
-        order = int(model_file[-5])
 
         model = joblib.load(os.path.join(args.models_dir, model_file))
+
+        order = model.steps[0][1].degree
+        alpha = None
+        if hasattr(model.steps[-1][1], "alpha"):
+            alpha = model.steps[-1][1].alpha
+
         scores_pred = model.predict(features)
         scores_pred = np.clip(scores_pred, 0, 1)
         pc = pearsonr(scores_pred, scores)
@@ -62,7 +67,13 @@ def main(args):
         ax.legend()
         ax.set_ylabel('score', fontsize=FONTSIZE)
         ax.set_xlabel('score GT', fontsize=FONTSIZE)
-        ax.set_title("{} ({})\nPC {:.3f}".format(model_name, order, pc[0]))
+        title_str = "{} (order: {}".format(model_name, order)
+        if alpha is not None:
+            title_str += ", alpha: {:.2E})".format(alpha)
+        else:
+            title_str += ")"
+        title_str += "\nPC {:.3f}".format(pc[0])
+        ax.set_title(title_str)
         ax.grid(linestyle='--')
         for tick in ax.xaxis.get_major_ticks() + ax.yaxis.get_major_ticks():
             tick.label.set_fontsize(FONTSIZE)
@@ -103,5 +114,5 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     if not os.path.exists(args.output_dir):
-        os.mkdir(args.output_dir)
+        os.makedirs(args.output_dir)
     main(args)

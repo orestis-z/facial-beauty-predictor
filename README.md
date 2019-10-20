@@ -47,12 +47,11 @@ Those steps can be repeated for a mtcnn-only backbone (put `--backbone mtcnn` fl
 
 FaceNet features:
 
-| Regressor     | RMSE   | MAE    | PC    |
-| ------------- | ------ | ------ | ----- |
-| Baysian Ridge | 0.1010 | 0.0780 | 0.835 |
-| Lasso         | 0.0983 | 0.0759 | 0.845 |
-| Ridge         | 0.0912 | 0.0713 | 0.870 |
-| Linear        | 0.0912 | 0.0713 | 0.870 |
+| Regressor | PC    |
+| --------- | ----- |
+| Lasso     | 0.846 |
+| Ridge     | 0.872 |
+| Linear    | 0.872 |
 
 FaceNet + MTCNN features:
 
@@ -66,12 +65,11 @@ MTCNN only features:
 
 FaceNet features:
 
-| Regressor     | RMSE  | MAE   | PC    |
-| ------------- | ----- | ----- | ----- |
-| Linear        | 0.161 | 0.127 | 0.527 |
-| Baysian Ridge | 0.150 | 0.116 | 0.535 |
-| Lasso         | 0.151 | 0.119 | 0.544 |
-| Ridge         | 0.151 | 0.120 | 0.559 |
+| Regressor | PC    |
+| --------- | ----- |
+| Linear    | 0.536 |
+| Lasso     | 0.550 |
+| Ridge     | 0.567 |
 
 FaceNet + MTCNN features:
 

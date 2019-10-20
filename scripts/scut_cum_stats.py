@@ -10,13 +10,17 @@ from scipy.special import logit
 
 
 def main(args):
-    data = pickle.load(open(args.data_file, "rb"))
+    db_dict = pickle.load(open(args.db_file, "rb"))
+    sorted_scores = sorted([d["score"] for _, d in db_dict["all"].items()])
+    x = np.linspace(0, 1, len(sorted_scores))
+    plt.plot(x, sorted_scores, ".", markersize=0.5)
 
-    sorted_scores = sorted([d["score"] for _, d in data["all"].items()])
-
-    x = np.arange(0, 1, 1 / len(sorted_scores))
-
-    plt.plot(x, sorted_scores)
+    if args.db_extra_file:
+        db_extra_dict = pickle.load(open(args.db_extra_file, "rb"))
+        sorted_scores = sorted([d["score"]
+                                for _, d in db_extra_dict["all"].items()])
+        x = np.linspace(0, 1, len(sorted_scores))
+        plt.plot(x, sorted_scores, ".", markersize=0.5)
     # plt.plot(x, [logit(y) for y in sorted_scores])
     plt.grid(linestyle="--")
     plt.xlabel("prob to have a score between 0 and y")
@@ -27,8 +31,13 @@ def main(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--data',
-        dest='data_file',
+        '--db',
+        dest='db_file',
+        type=str
+    )
+    parser.add_argument(
+        '--db-extra',
+        dest='db_extra_file',
         type=str
     )
     if len(sys.argv) == 1:

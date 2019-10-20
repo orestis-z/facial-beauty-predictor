@@ -2,10 +2,12 @@ import os
 import sys
 import argparse
 import pickle
+import random
 
 import numpy as np
 from scipy.optimize import minimize
 from scipy.stats import pearsonr
+from sklearn.metrics import mean_squared_error
 import sklearn.linear_model as linear_model
 import sklearn.svm as svm
 import sklearn.ensemble as ensemble
@@ -24,14 +26,36 @@ def main(args):
     model_dir = os.path.join(
         args.output_dir, "models/{}".format("all/" if args.no_split else ""))
     if not os.path.exists(model_dir):
-        os.mkdir(model_dir)
+        os.makedirs(model_dir)
 
     db_dict = pickle.load(open(args.db_file, "rb"))
-
     db_train = db_dict["all" if args.no_split else "train"]
     db_test = db_dict["test"]
-
     features = np.load(open(args.features, "rb"), allow_pickle=True).item()
+
+    if args.db_extra_file is not None:
+        assert args.features_extra is not None
+        db_extra_dict = pickle.load(open(args.db_extra_file, "rb"))
+        db_extra_train = db_extra_dict["all" if args.no_split else "train"]
+
+        # ensure all datasets of same size
+        db_extra_train_keys = db_extra_train.keys()
+        db_train_keys = db_train.keys()
+        if len(db_extra_train_keys) > len(db_train_keys):
+            db_extra_train_keys = random.sample(
+                db_extra_train_keys, len(db_train_keys))
+            db_extra_train = {key: db_extra_train_keys[key]
+                              for key in db_extra_train_keys}
+        else:
+            db_train_keys = random.sample(
+                db_train_keys, len(db_extra_train_keys))
+            db_train = {key: db_train[key] for key in db_train_keys}
+
+        db_train.update(db_extra_train)
+        features_extra = np.load(
+            open(args.features_extra, "rb"), allow_pickle=True).item()
+        features.update(features_extra)
+
     features_train = [features[profile_id]
                       for profile_id in db_train.keys()]
     features_test = [features[profile_id] for profile_id in db_test.keys()]
@@ -52,11 +76,10 @@ def main(args):
     # uncomment regressors to train
     model_info_list = (
         (linear_model.LinearRegression,),
-        (linear_model.Lasso, dict(type="CONT", init=dict(alpha=1e-4))),
-        (linear_model.Ridge, dict(type="CONT", init=dict(alpha=1e-4))),
-        (linear_model.BayesianRidge, dict(type="CONT", init=dict(
-            alpha_1=1e-06, alpha_2=1e-06, lambda_1=1e-06, lambda_2=1e-06))),
-
+        (linear_model.Lasso, dict(type="CONT", init=dict(alpha=1e-6))),
+        (linear_model.Ridge, dict(type="CONT", init=dict(alpha=1e-6))),
+        # (linear_model.BayesianRidge, dict(type="CONT", init=dict(
+        #     alpha_1=1e-06, alpha_2=1e-06, lambda_1=1e-06, lambda_2=1e-06))),
         # (linear_model.SGDRegressor,),
         # (linear_model.ElasticNet,),  # const
         # (linear_model.ARDRegression,),
@@ -118,12 +141,12 @@ def main(args):
                     model = get_model(kwargs)
                     model.fit(features_train, scores_train)
                     scores_pred = model.predict(features_train)
-                    pc = pearsonr(scores_pred, scores_train)[0]
-                    return -pc
+                    mean_squared_error = pearsonr(scores_pred, scores_train)[0]
+                    return mean_squared_error
                 res = minimize(func, list(init.values()), method="Nelder-Mead")
                 print(res)
                 res_kwargs = {k: res.x[i] for i, k in enumerate(init.keys())}
-                model = model_class(**res_kwargs)
+                model = get_model(res_kwargs)
                 model.fit(features_train, scores_train)
             else:
                 raise ValueError
@@ -158,6 +181,11 @@ def parse_args():
         type=str
     )
     parser.add_argument(
+        "--db-extra",
+        dest="db_extra_file",
+        type=str
+    )
+    parser.add_argument(
         "--output-dir",
         dest="output_dir",
         default="data",
@@ -167,6 +195,11 @@ def parse_args():
         "--features",
         dest="features",
         default="data/mtcnn-facenet/features.npy",
+        type=str
+    )
+    parser.add_argument(
+        "--features-extra",
+        dest="features_extra",
         type=str
     )
     parser.add_argument(
@@ -193,5 +226,5 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     if not os.path.exists(args.output_dir):
-        os.mkdir(args.output_dir)
+        os.makedirs(args.output_dir)
     main(args)
