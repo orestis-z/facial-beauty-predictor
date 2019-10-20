@@ -6,6 +6,8 @@ from threading import Thread
 import logging
 import requests
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
+import time
 
 import tensorflow as tf
 from skimage.transform import resize
@@ -41,7 +43,7 @@ def worker_mtcnn_facenet_async(db, facenet_model_path, skip_multiple_faces=False
     return features_dict
 
 
-def worker_mtcnn_facenet_async_queue(img_paths_queue, facenet_model_path, regressor_model, skip_multiple_faces=True):
+def worker_mtcnn_facenet_async_queue(img_paths_queue, facenet_model_path, regressor_model, percentiles, skip_multiple_faces=True):
     # img_paths -> img_list -> croped_faces -> features -> avg_features
     pipeline = Pipeline(img_paths_queue,
                         (image_loader_async, dict(kwargs=dict(local_files=False))),
@@ -50,7 +52,8 @@ def worker_mtcnn_facenet_async_queue(img_paths_queue, facenet_model_path, regres
                         (gen_facenet_features_async,
                          dict(args=[facenet_model_path])),
                         calc_avg_features_async,
-                        (regress_score_async, dict(args=[regressor_model])))
+                        (regress_score_async, dict(args=[regressor_model])),
+                        (calc_percentile, dict(args=[percentiles])))
     return pipeline.out_queue
 
 
@@ -132,26 +135,38 @@ class PipelineJoinable(Pipeline):
 def image_loader_async(img_path_queue, img_list_queue, local_files=True):
     while True:
         img_path_dict = img_path_queue.get()
-        img_paths = img_path_dict["paths"]
-        profile_id = img_path_dict["id"]
 
-        img_list = []
-        for img_path in img_paths:
-            if local_files:
-                if os.path.exists(img_path):
-                    img = imageio.imread(img_path)
-                    img_list.append(img)
+        def load_images(img_paths, profile_id):
+            start = time.time()
+            img_list = []
+
+            def load_image(img_path):
+                if local_files:
+                    if os.path.exists(img_path):
+                        img = imageio.imread(img_path)
+                        img_list.append(img)
+                    else:
+                        logging.warn("{} not found".format(img_path))
                 else:
-                    logging.warn("{} not found".format(img_path))
-            else:
-                try:
-                    response = requests.get(img_path, timeout=5)
-                    img = imageio.imread(BytesIO(response.content))
-                    img_list.append(img)
-                except Exception:
-                    logging.exception("Could not download {}".format(img_path))
-        img_list_queue.put(dict(id=profile_id, img_list=img_list))
-        img_path_queue.task_done()
+                    try:
+                        response = requests.get(img_path, timeout=5)
+                        img = imageio.imread(BytesIO(response.content))
+                        img_list.append(img)
+                    except Exception:
+                        logging.exception(
+                            "Could not download {}".format(img_path))
+
+            with ThreadPoolExecutor(thread_name_prefix="LoadImagesWorker", max_workers=max(len(img_paths), os.cpu_count() + 4)) as executor:
+                executor.map(load_image, img_paths)
+
+            img_list_queue.put(dict(id=profile_id, img_list=img_list))
+            img_path_queue.task_done()
+            logging.debug("Loading {} profile images took {:.3f}s".format(
+                len(img_list),
+                time.time() - start))
+        thread = Thread(target=load_images, name="LoadImagesThread", args=(
+            img_path_dict["paths"], img_path_dict["id"]))
+        thread.start()
 
 
 def mtcnn_face_detector_async(img_list_queue, cropped_faces_queue,
@@ -162,6 +177,7 @@ def mtcnn_face_detector_async(img_list_queue, cropped_faces_queue,
 
     while True:
         img_list_dict = img_list_queue.get()
+        start = time.time()
         img_list = img_list_dict["img_list"]
         profile_id = img_list_dict["id"]
 
@@ -210,6 +226,8 @@ def mtcnn_face_detector_async(img_list_queue, cropped_faces_queue,
         cropped_faces_queue.put(
             dict(id=profile_id, faces=faces, features=features))
         img_list_queue.task_done()
+        logging.debug("Detecting {} faces in {} images took {:.3f}s".format(
+            len(faces), len(img_list), time.time() - start))
 
 
 def mtcnn_features_async(img_list_queue, features_queue):
@@ -254,6 +272,7 @@ def gen_facenet_features_async(cropped_faces_queue, features_queue,
 
             while True:
                 cropped_face_dict = cropped_faces_queue.get()
+                start = time.time()
                 img_list = cropped_face_dict["faces"]
                 mtcnn_features = cropped_face_dict.get("features")
                 profile_id = cropped_face_dict["id"]
@@ -309,6 +328,8 @@ def gen_facenet_features_async(cropped_faces_queue, features_queue,
 
                 features_queue.put(dict(id=profile_id, features=features))
                 cropped_faces_queue.task_done()
+                logging.debug("Feature vector generation for {} faces took {:.3f}s".format(
+                    n_images, time.time() - start))
 
 
 def calc_avg_features_async(features_queue, avg_features_queue):
@@ -330,6 +351,7 @@ def calc_avg_features_async(features_queue, avg_features_queue):
 def regress_score_async(features_queue, score_queue, model):
     while True:
         features_dict = features_queue.get()
+        start = time.time()
         features = features_dict["features"].reshape(
             1, -1)  # (1, 128) for FaceNet
         profile_id = features_dict["id"]
@@ -347,9 +369,31 @@ def regress_score_async(features_queue, score_queue, model):
         score_queue.put(
             dict(id=profile_id, score=score_pred))
         features_queue.task_done()
+        logging.debug("Regression took {:.3f}s".format(time.time() - start))
+
+
+def calc_percentile(score_queue, percentile_queue, percentiles):
+    while True:
+        score_dict = score_queue.get()
+        profile_id = score_dict["id"]
+        score = score_dict["score"]
+
+        if score is None:
+            percentile = None
+        else:
+            percentile = 1
+            for i, percentile_score in enumerate(percentiles):
+                if score > percentile_score:
+                    percentile = 1 - i * 0.05
+                else:
+                    break
+        percentile_queue.put(
+            dict(id=profile_id, percentile=percentile))
+        score_queue.task_done()
 
 
 def collect_async(in_queue, out_list):
     while True:
         out_list.append(in_queue.get())
+        in_queue.task_done()
         in_queue.task_done()

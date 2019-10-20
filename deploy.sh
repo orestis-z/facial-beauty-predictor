@@ -1,0 +1,1 @@
+aws opsworks create-deployment --stack-id $OPSWORKS_STACK_ID --layer-ids $OPSWORKS_LAYER_ID --app-id $OPSWORKS_APP_ID --command "{\"Name\":\"deploy\"}" --comment "$(git show --pretty=format:"%h %s" -s HEAD)"

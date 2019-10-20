@@ -8,7 +8,7 @@ MAX_RSS = 1000  # [MB]
 MEM_CHECK_INTERVAL = 5 * 60  # [s]
 
 workers = 1
-timeout = 120
+timeout = 180
 graceful_timeout = 10 if getenv("FLASK_ENV") == "production" else 0
 log_level = "INFO"
 worker_class = "gevent"

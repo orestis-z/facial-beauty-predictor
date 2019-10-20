@@ -17,5 +17,4 @@ def normalize_dataset(db):
         all=ChainMap(*db_dict_list_norm),
         train=db["data"]["train"],
         test=db["data"]["test"]))
-    print(len(data["all"].keys()))
     return dict(data=data, meta=db["meta"])

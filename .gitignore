@@ -1,6 +1,8 @@
 data/
+!attractiveness_estimator/backbone/mtcnn/data/
 *.egg-info/
 .DS_STORE
 venv
 .env
 *.pyc
+.venv/

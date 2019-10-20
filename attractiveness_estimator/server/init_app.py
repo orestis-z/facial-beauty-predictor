@@ -7,19 +7,12 @@ import urllib.request
 import logging
 
 import boto3
+import numpy as np
 
 from attractiveness_estimator.worker import worker_mtcnn_facenet_async_queue
 
 
-def fetch_models(app):
-    if is_remote(app.config["REGRESSOR_MODEL_PATH"]):
-        local_regressor_model_path = "data/regressor_model.pkl"
-        if not file_exists(local_regressor_model_path):
-            download_s3_file(
-                app.config["REGRESSOR_MODEL_PATH"], local_regressor_model_path)
-            logging.debug("Downloaded regressor model to {}".format(
-                local_regressor_model_path))
-        app.config["REGRESSOR_MODEL_PATH"] = local_regressor_model_path
+def fetch_files(app):
     if is_remote(app.config["FACENET_MODEL_PATH"]):
         local_facenet_model_path = "data/facenet"
         if not folder_exists(local_facenet_model_path):
@@ -28,25 +21,42 @@ def fetch_models(app):
             logging.debug("Downloaded facenet model to {}".format(
                 local_facenet_model_path))
         app.config["FACENET_MODEL_PATH"] = local_facenet_model_path
+    if is_remote(app.config["REGRESSOR_MODEL_PATH"]):
+        local_regressor_model_path = "data/regressor_model.pkl"
+        if not file_exists(local_regressor_model_path):
+            download_s3_file(
+                app.config["REGRESSOR_MODEL_PATH"], local_regressor_model_path)
+            logging.debug("Downloaded regressor model to {}".format(
+                local_regressor_model_path))
+        app.config["REGRESSOR_MODEL_PATH"] = local_regressor_model_path
+    if is_remote(app.config["PERCENTILS_PATH"]):
+        local_percentiles_path = "data/percentiles.npy"
+        if not file_exists(local_percentiles_path):
+            download_s3_file(
+                app.config["PERCENTILS_PATH"], local_percentiles_path)
+            logging.debug("Downloaded percentiles to {}".format(
+                local_percentiles_path))
+        app.config["PERCENTILS_PATH"] = local_percentiles_path
 
 
 def init_worker(app):
     img_paths_queue = Queue()
     regressor_model = joblib.load(app.config["REGRESSOR_MODEL_PATH"])
+    percentiles = np.load(open(app.config["PERCENTILS_PATH"], "rb"))
     results_queue = worker_mtcnn_facenet_async_queue(
-        img_paths_queue, app.config["FACENET_MODEL_PATH"], regressor_model)
-    score_queues = app.config["SCORE_QUEUES"]
+        img_paths_queue, app.config["FACENET_MODEL_PATH"], regressor_model, percentiles)
+    result_queues = app.config["PERCENTILE_QUEUES"]
     thread = Thread(target=distribute_results,
-                    args=(results_queue, score_queues,), name="DistributeResultsThread", daemon=True)
+                    args=(results_queue, result_queues,), name="DistributeResultsThread", daemon=True)
     thread.start()
     return img_paths_queue
 
 
-def distribute_results(results_queue, score_queues):
+def distribute_results(results_queue, result_queues):
     while True:
         result = results_queue.get()
-        result_queue = score_queues[result["id"]]
-        result_queue.put(result["score"])
+        result_queue = result_queues[result["id"]]
+        result_queue.put(result["percentile"])
 
 
 def is_remote(url):

@@ -8,6 +8,7 @@ class Config(object):
 
     FACENET_MODEL_PATH = "s3://attractiveness-estimator/facenet/20170512-110547"
     REGRESSOR_MODEL_PATH = "s3://attractiveness-estimator/regressor_model.pkl"
+    PERCENTILS_PATH = "s3://attractiveness-estimator/percentiles.npy"
 
 
 class DevelopmentConfig(Config):
@@ -16,7 +17,8 @@ class DevelopmentConfig(Config):
 
     # LOG_METRICS_TIMEOUT = 1 * 5  # [s]
 
-    REGRESSOR_MODEL_PATH = "data/scut/mtcnn-facenet/models/sklearn.linear_model.base.LinearRegression_1.pkl"
+    # REGRESSOR_MODEL_PATH = "data/scut/mtcnn-facenet/models/sklearn.linear_model.base.LinearRegression_1.pkl"
+    PERCENTILS_PATH = "data/percentiles.npy"
 
 
 class StagingConfig(Config):
