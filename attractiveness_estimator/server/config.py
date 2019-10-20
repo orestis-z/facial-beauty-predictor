@@ -6,8 +6,8 @@ class Config(object):
     LOG_METRICS = True
     LOG_METRICS_TIMEOUT = 5 * 60  # [s] == 5 min
 
-    FACENET_MODEL_PATH = "data/20170512-110547"
-    REGRESSOR_MODEL_PATH = "data/scut/mtcnn-facenet/models/all/sklearn.linear_model.base.LinearRegression_1.pkl"
+    FACENET_MODEL_PATH = "s3://attractiveness-estimator/facenet/20170512-110547"
+    REGRESSOR_MODEL_PATH = "s3://attractiveness-estimator/regressor_model.pkl"
 
 
 class DevelopmentConfig(Config):

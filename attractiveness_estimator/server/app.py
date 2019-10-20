@@ -11,7 +11,7 @@ import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 import numpy as np
 
-from attractiveness_estimator.server.worker import init_app as worker_init_app
+from attractiveness_estimator.server.init_app import fetch_models, init_worker
 from attractiveness_estimator.server.utils.env import is_main_run
 
 
@@ -19,6 +19,8 @@ DEV = os.environ.get("FLASK_ENV") == "development"
 logging.basicConfig(level=logging.DEBUG if DEV else logging.INFO)
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 logging.getLogger("PIL").setLevel(logging.INFO)
+logging.getLogger("s3transfer").setLevel(logging.INFO)
+logging.getLogger("botocore").setLevel(logging.INFO)
 # logging.getLogger("urllib3").setLevel(logging.INFO)
 # logging.getLogger("werkzeug").setLevel(logging.INFO)
 # logging.getLogger("metric").setLevel(logging.INFO)
@@ -46,8 +48,9 @@ def create_app():
         #     metrics.init_app(app)
         #     request_check.init_app(app)
 
+        fetch_models(app)
         app.config["SCORE_QUEUES"] = {}
-        img_paths_queue = worker_init_app(app)
+        img_paths_queue = init_worker(app)
         app.config["IMG_PATHS_QUEUE"] = img_paths_queue
 
         json = FlaskJSON()

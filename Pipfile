@@ -21,9 +21,11 @@ gunicorn = "*"
 gevent = "*"
 psutil = "*"
 requests = "*"
+boto3 = "*"
 
 [requires]
 python_version = "3.7"
 
 [scripts]
 gunicorn-dev = "gunicorn attractiveness_estimator.server.wsgi -k gevent -b localhost:5000 -p master.pid -c attractiveness_estimator/server/wsgi/gunicorn_config.py --reload"
+deploy = 'aws opsworks create-deployment --stack-id $OPSWORKS_STACK_ID --app-id $OPSWORKS_APP_ID --command "{\"Name\":\"deploy\"}" --comment "`git show --pretty=format:"%h %s" -s HEAD`"'
