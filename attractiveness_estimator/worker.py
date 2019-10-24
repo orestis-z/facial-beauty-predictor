@@ -341,7 +341,10 @@ def calc_avg_features_async(features_queue, avg_features_queue):
         features = features_dict["features"]  # (128, n_emb) for FaceNet
         profile_id = features_dict["id"]
 
-        avg_features = np.mean(features, axis=0)
+        if features.shape[0]:
+            avg_features = np.mean(features, axis=0)
+        else:
+            avg_features = features
 
         avg_features_queue.put(
             dict(id=profile_id, features=avg_features))
@@ -352,12 +355,12 @@ def regress_score_async(features_queue, score_queue, model):
     while True:
         features_dict = features_queue.get()
         start = time.time()
-        features = features_dict["features"].reshape(
-            1, -1)  # (1, 128) for FaceNet
+        features = features_dict["features"]  # (1, 128) for FaceNet
         profile_id = features_dict["id"]
 
         if features.shape[0]:
             try:
+                features = features.reshape(1, -1)
                 score_pred = model.predict(features)
                 score_pred = np.clip(score_pred, 0, 1)
             except Exception:
