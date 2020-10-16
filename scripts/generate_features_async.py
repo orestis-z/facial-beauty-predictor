@@ -6,9 +6,9 @@ import pickle
 import numpy as np
 from scipy.special import logit
 
-sys.path.append(os.path.abspath('../attractiveness_estimator')) # Ignore
+sys.path.append(os.path.abspath('../facial_beauty_predictor')) # Ignore
 
-from attractiveness_estimator.worker import worker_mtcnn_async, worker_mtcnn_facenet_async, worker_mtcnn_facenet_2_async
+from facial_beauty_predictor.worker import worker_mtcnn_async, worker_mtcnn_facenet_async, worker_mtcnn_facenet_2_async
 
 
 def main(args):

@@ -1,5 +1,5 @@
 data/
-!attractiveness_estimator/backbone/mtcnn/data/
+!facial_beauty_predictor/backbone/mtcnn/data/
 *.egg-info/
 .DS_STORE
 venv

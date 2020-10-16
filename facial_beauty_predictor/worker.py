@@ -14,9 +14,9 @@ from skimage.transform import resize
 import numpy as np
 import imageio
 
-from attractiveness_estimator.backbone.mtcnn.mtcnn import MTCNN
-import attractiveness_estimator.backbone.facenet as facenet
-import attractiveness_estimator.utils.img as img_utils
+from facial_beauty_predictor.backbone.mtcnn.mtcnn import MTCNN
+import facial_beauty_predictor.backbone.facenet as facenet
+import facial_beauty_predictor.utils.img as img_utils
 
 MARGIN = 44
 FACE_IMAGE_SIZE = 182

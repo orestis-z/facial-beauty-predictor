@@ -28,5 +28,5 @@ blinker = "*"
 python_version = "3.7"
 
 [scripts]
-gunicorn-dev = "gunicorn attractiveness_estimator.server.wsgi -k gevent -b localhost:5001 -p master.pid -c attractiveness_estimator/server/wsgi/gunicorn_config.py --reload"
+gunicorn-dev = "gunicorn facial_beauty_predictor.server.wsgi -k gevent -b localhost:5001 -p master.pid -c facial_beauty_predictor/server/wsgi/gunicorn_config.py --reload"
 deploy = "sh deploy.sh"

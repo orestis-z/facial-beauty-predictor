@@ -14,8 +14,8 @@ import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 import numpy as np
 
-from attractiveness_estimator.server.init_app import fetch_files, init_worker
-from attractiveness_estimator.server.utils.env import is_main_run
+from facial_beauty_predictor.server.init_app import fetch_files, init_worker
+from facial_beauty_predictor.server.utils.env import is_main_run
 
 
 DEV = os.environ.get("FLASK_ENV") == "development"
@@ -37,7 +37,7 @@ def create_app():
     # create and configure the app
     app = Flask(__name__)
     app.config.from_object(os.environ.get(
-        'APP_SETTINGS', "attractiveness_estimator.server.config.Config"))
+        'APP_SETTINGS', "facial_beauty_predictor.server.config.Config"))
 
     if main_run:
         logging.info("Creating app with config:\n" +

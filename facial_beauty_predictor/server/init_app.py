@@ -9,7 +9,7 @@ import logging
 import boto3
 import numpy as np
 
-from attractiveness_estimator.worker import worker_mtcnn_facenet_async_queue
+from facial_beauty_predictor.worker import worker_mtcnn_facenet_async_queue
 
 
 def fetch_files(app):

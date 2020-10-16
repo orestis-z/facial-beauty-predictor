@@ -1,4 +1,8 @@
-# Attractiveness Estimator
+# Facial Beauty Predictor
+
+A deep learning model based on FaceNet and MTCNN to predict a beauty score for faces in images. The CNN outperformes the state-of-the art by up to 18% (2019).
+
+Included are scripts for generating features from images, training regressors, as well as a async server for inference based on gunicorn / gevent.
 
 ## Based on
 
@@ -43,9 +47,9 @@ Those steps can be repeated for a mtcnn-only backbone (put `--backbone mtcnn` fl
 
 ## Results
 
-### SCUT
+### SCUT Dataset
 
-FaceNet features:
+#### FaceNet features
 
 | Regressor | PC    |
 | --------- | ----- |
@@ -53,17 +57,25 @@ FaceNet features:
 | Ridge     | 0.872 |
 | Linear    | 0.872 |
 
-FaceNet + MTCNN features:
+#### FaceNet + MTCNN features:
+
+| Regressor | PC  |
+| --------- | --- |
+
 
 @TODO (note: was slightly better than Facenet features only)
 
-MTCNN only features:
+#### MTCNN only features
+
+| Regressor | PC  |
+| --------- | --- |
+
 
 @TODO
 
-## HotOrNot
+### HotOrNot Dataset
 
-FaceNet features:
+#### FaceNet features
 
 | Regressor | PC    |
 | --------- | ----- |
@@ -71,10 +83,18 @@ FaceNet features:
 | Lasso     | 0.550 |
 | Ridge     | 0.567 |
 
-FaceNet + MTCNN features:
+#### FaceNet + MTCNN features
+
+| Regressor | PC  |
+| --------- | --- |
+
 
 @TODO
 
-MTCNN only features:
+#### MTCNN only features
+
+| Regressor | PC  |
+| --------- | --- |
+
 
 @TODO
